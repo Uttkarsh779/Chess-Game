@@ -24,8 +24,21 @@ connectDB();
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretchessjwt';
 
 const app = express();
+const allowedOrigins = [
+  "http://localhost:5174",
+  "https://chess-game-five-eta.vercel.app"
+];
+
 app.use(cors({
-  origin: ["http://localhost:5174", "https://chess-game-five-eta.vercel.app/"],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow Postman / curl
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
