@@ -40,11 +40,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ socket, roomCode, myName }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = (message: string, type: 'text' | 'reaction' | 'emoji' = 'text') => {
-    if (!message.trim()) return;
-    socket.emit('chat:send', { message, type });
-    if (type === 'text') setInputValue('');
-  };
+const sendMessage = (message: string, type: 'text' | 'reaction' | 'emoji' = 'text') => {
+  if (!message.trim()) return;
+
+  socket.emit('chat:send', {
+    roomId: roomCode,   // ✅ USE IT HERE
+    message,
+    type
+  });
+
+  if (type === 'text') setInputValue('');
+};
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
