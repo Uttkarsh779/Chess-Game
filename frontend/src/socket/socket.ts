@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'https://chess-game-1-6mtw.onrender.com';
 
 let socket: Socket | null = null;
 

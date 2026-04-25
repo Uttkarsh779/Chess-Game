@@ -25,7 +25,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecretchessjwt';
 
 const app = express();
 app.use(cors({
-  origin: ["http://localhost:5174", "https://your-frontend.vercel.app"],
+  origin: ["http://localhost:5174", "https://chess-game-five-eta.vercel.app/"],
   credentials: true
 }));
 app.use(express.json());
