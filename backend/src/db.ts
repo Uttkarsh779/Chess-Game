@@ -3,7 +3,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/chess';
+
+
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://uttkarshtiwari01_db_user:m6jIZBNdJfGHwDJB@cluster0.jbrudru.mongodb.net/chess_db?retryWrites=true&w=majority';
 
 export const connectDB = async () => {
   try {
