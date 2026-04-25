@@ -52,7 +52,10 @@ const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: [
+      "http://localhost:5174",
+      "https://chess-game-five-eta.vercel.app"
+    ],
     methods: ['GET', 'POST'],
   },
   pingTimeout: 60000,
