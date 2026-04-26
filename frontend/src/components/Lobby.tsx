@@ -79,17 +79,18 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
   );
 };
 
-    const onError = (data: { message: string }) => {
-      s.off('reconnected', onReconnected);
-      s.off('error_msg', onError);
-      setLoading(null);
-      // Clear stale session
-      localStorage.removeItem('chess_room');
-      localStorage.removeItem('chess_token');
-      localStorage.removeItem('chess_color');
-      setSavedSession(null);
-      setError('Session expired. The room may no longer exist.');
-    };
+   const onError = (data: { message: string }) => {
+  s.off('reconnected', onReconnected);
+  s.off('error_msg', onError);
+  setLoading(null);
+
+  localStorage.removeItem('chess_room');
+  localStorage.removeItem('chess_token');
+  localStorage.removeItem('chess_color');
+  setSavedSession(null);
+
+  setError(data.message); // ✅ USE IT
+};
 
     s.once('reconnected', onReconnected);
     s.once('error_msg', onError);
