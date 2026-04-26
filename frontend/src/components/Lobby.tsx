@@ -56,12 +56,29 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
     setError('');
     const s = socketRef.current;
 
+    // const onReconnected = (data: { code: string; color: 'w' | 'b'; gameState: any; players: any }) => {
+    //   s.off('reconnected', onReconnected);
+    //   s.off('error_msg', onError);
+    //   setLoading(null);
+    //   onRoomJoined(data.code, data.color, savedRtoken, data.players[data.color]?.name || 'Guest');
+    // };
+
+
     const onReconnected = (data: { code: string; color: 'w' | 'b'; gameState: any; players: any }) => {
-      s.off('reconnected', onReconnected);
-      s.off('error_msg', onError);
-      setLoading(null);
-      onRoomJoined(data.code, data.color, savedRtoken, data.players[data.color]?.name || 'Guest');
-    };
+  const { code, color, players } = data;
+
+  s.off('reconnected', onReconnected);
+  s.off('error_msg', onError);
+  setLoading(null);
+
+  onRoomJoined(
+    code,
+    color,
+    savedRtoken,
+    players[color]?.name || 'Guest'
+  );
+};
+
     const onError = (data: { message: string }) => {
       s.off('reconnected', onReconnected);
       s.off('error_msg', onError);
