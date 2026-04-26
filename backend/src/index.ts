@@ -107,15 +107,18 @@ io.on('connection', (socket) => {
       const user = (socket as any).user;
       const playerName = user ? user.username : ((name || 'Guest').trim().slice(0, 20) || 'Guest');
       const userId = user ? user.id : 'guest';
+      console.log(`[TRY JOIN] Room ${code} by ${playerName} (${socket.id})`);
       const result = joinRoom(socket.id, code, playerName, userId);
 
       if ('error' in result) {
+        console.warn(`[JOIN FAIL] ${result.error} (Code: ${code})`);
         socket.emit('error_msg', { message: result.error });
         return;
       }
 
       const { room, reconnectToken } = result;
       socket.join(room.code);
+      console.log(`[JOIN SUCCESS] Room ${room.code} - Socket ${socket.id} joined.`);
 
       const white = room.players.find(p => p.color === 'w')!;
       const black = room.players.find(p => p.color === 'b')!;
@@ -129,6 +132,7 @@ io.on('connection', (socket) => {
       });
 
       // Tell both the game has started
+      console.log(`[GAME START] Room ${room.code} initialized.`);
       io.to(room.code).emit('game_started', {
         gameState: room.gameState,
         players: {
@@ -137,7 +141,6 @@ io.on('connection', (socket) => {
         },
       });
 
-      console.log(`[JOIN] Room ${room.code} by ${playerName} (${socket.id})`);
     } catch (err) {
       socket.emit('error_msg', { message: 'Failed to join room.' });
     }

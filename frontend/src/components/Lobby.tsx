@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { connectSocket } from '../socket/socket';
 import AuthModal from './AuthModal';
 import HistoryList from './HistoryList';
+import heroImage from '../assets/hero.png';
 
 interface LobbyProps {
   onRoomCreated: (code: string, color: 'w' | 'b', reconnectToken: string, name: string) => void;
@@ -12,7 +13,7 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
   const [name, setName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState<'create' | 'join' | null>(null);
+  const [loading, setLoading] = useState<'create' | 'join' | 'rejoin' | null>(null);
   const socketRef = useRef(connectSocket());
 
   const [user, setUser] = useState<any>(null);
@@ -20,6 +21,7 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
   const [showAuth, setShowAuth] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showPlayMenu, setShowPlayMenu] = useState(false);
+  const [savedSession, setSavedSession] = useState<{ room: string; color: string } | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('chess_user');
@@ -27,8 +29,14 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
     if (savedUser && savedToken) {
       setUser(JSON.parse(savedUser));
       setToken(savedToken);
-      // Ensure socket is authenticated if we have a token
       socketRef.current.emit('authenticate', { token: savedToken });
+    }
+    // Check for saved game session
+    const savedRoom  = localStorage.getItem('chess_room');
+    const savedRtoken = localStorage.getItem('chess_token');
+    const savedColor = localStorage.getItem('chess_color');
+    if (savedRoom && savedRtoken && savedColor) {
+      setSavedSession({ room: savedRoom, color: savedColor });
     }
   }, []);
 
@@ -37,6 +45,45 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
     localStorage.removeItem('chess_auth_token');
     setUser(null);
     setToken(null);
+  };
+
+  const handleRejoin = () => {
+    const savedRoom  = localStorage.getItem('chess_room');
+    const savedRtoken = localStorage.getItem('chess_token');
+    const savedColor = localStorage.getItem('chess_color') as 'w' | 'b' | null;
+    if (!savedRoom || !savedRtoken || !savedColor) return;
+    setLoading('rejoin');
+    setError('');
+    const s = socketRef.current;
+
+    const onReconnected = (data: { code: string; color: 'w' | 'b'; gameState: any; players: any }) => {
+      s.off('reconnected', onReconnected);
+      s.off('error_msg', onError);
+      setLoading(null);
+      onRoomJoined(data.code, data.color, savedRtoken, data.players[data.color]?.name || 'Guest');
+    };
+    const onError = (data: { message: string }) => {
+      s.off('reconnected', onReconnected);
+      s.off('error_msg', onError);
+      setLoading(null);
+      // Clear stale session
+      localStorage.removeItem('chess_room');
+      localStorage.removeItem('chess_token');
+      localStorage.removeItem('chess_color');
+      setSavedSession(null);
+      setError('Session expired. The room may no longer exist.');
+    };
+
+    s.once('reconnected', onReconnected);
+    s.once('error_msg', onError);
+    s.emit('reconnect_room', { code: savedRoom, token: savedRtoken });
+  };
+
+  const handleClearSession = () => {
+    localStorage.removeItem('chess_room');
+    localStorage.removeItem('chess_token');
+    localStorage.removeItem('chess_color');
+    setSavedSession(null);
   };
 
   const handleCreate = () => {
@@ -113,6 +160,26 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
         </div>
       </nav>
 
+      {/* Rejoin Session Banner */}
+      {savedSession && (
+        <div className="rejoin-banner">
+          <div className="rejoin-info">
+            <span className="rejoin-icon">♟</span>
+            <span>Active game found — Room <strong>{savedSession.room}</strong> ({savedSession.color === 'w' ? 'White' : 'Black'})</span>
+          </div>
+          <div className="rejoin-actions">
+            <button
+              className="hero-btn primary rejoin-btn"
+              onClick={handleRejoin}
+              disabled={loading === 'rejoin'}
+            >
+              {loading === 'rejoin' ? '⟳ Rejoining…' : '↩ Rejoin Game'}
+            </button>
+            <button className="rejoin-dismiss" onClick={handleClearSession} title="Dismiss">✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <header className="hero-section">
         <div className="hero-content">
@@ -130,7 +197,7 @@ const Lobby: React.FC<LobbyProps> = ({ onRoomCreated, onRoomJoined }) => {
           </div>
         </div>
         <div className="hero-visual">
-          <div className="chess-grid"></div>
+          <img src={heroImage} alt="Chess board" className="hero-image" />
         </div>
       </header>
 

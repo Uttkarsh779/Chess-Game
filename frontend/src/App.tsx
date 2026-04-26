@@ -43,6 +43,8 @@ const App: React.FC = () => {
   const [opponentConnected, setOpponentConnected] = useState(true);
   const [drawOffered, setDrawOffered] = useState(false);
   const [copied, setCopied]         = useState(false);
+  const [isDisconnected, setIsDisconnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   // Timers
   const [whiteTime, setWhiteTime] = useState(600);
@@ -50,12 +52,16 @@ const App: React.FC = () => {
   const timerRef = useRef<number | null>(null);
 
   const socketRef = useRef(connectSocket());
+  const phaseRef  = useRef<AppPhase>('lobby'); // track phase without closure capture
 
   // ─── Notifications ──────────────────────────────────────────────────────────
   const notify = useCallback((msg: string, ms = 3000) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), ms);
   }, []);
+
+  // Keep phaseRef in sync so socket listeners can read latest phase
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   // ─── Timer management ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -136,6 +142,9 @@ const App: React.FC = () => {
       setWhiteTime(data.players.w.timeLeft);
       setBlackTime(data.players.b.timeLeft);
       setPhase(data.gameState.gameStatus === 'active' ? 'game' : 'ended');
+      setIsDisconnected(false);
+      setReconnecting(false);
+      notify('Reconnected to game!');
     };
 
     const onInvalidMove = (data: { message: string }) => {
@@ -157,6 +166,20 @@ const App: React.FC = () => {
     s.on('invalid_move',         onInvalidMove);
     s.on('error_msg',            onErrorMsg);
 
+    // Self-disconnect/reconnect detection
+    const onDisconnect = () => {
+      // Use phaseRef to read current phase regardless of closure
+      if (phaseRef.current === 'game' || phaseRef.current === 'waiting') {
+        setIsDisconnected(true);
+      }
+    };
+    const onConnect = () => {
+      setIsDisconnected(false);
+      setReconnecting(false);
+    };
+    s.on('disconnect', onDisconnect);
+    s.on('connect',    onConnect);
+
     return () => {
       s.off('game_started',          onGameStarted);
       s.off('move_made',             onMoveMade);
@@ -168,21 +191,13 @@ const App: React.FC = () => {
       s.off('reconnected',           onReconnected);
       s.off('invalid_move',          onInvalidMove);
       s.off('error_msg',             onErrorMsg);
+      s.off('disconnect',            onDisconnect);
+      s.off('connect',               onConnect);
     };
   }, [notify]);
 
-  // ─── Reconnect on reload ────────────────────────────────────────────────────
-  useEffect(() => {
-    const savedRoom  = localStorage.getItem('chess_room');
-    const savedToken = localStorage.getItem('chess_token');
-    const savedColor = localStorage.getItem('chess_color') as Color | null;
 
-    if (savedRoom && savedToken && savedColor) {
-      const s = connectSocket();
-      setMyColor(savedColor);
-      s.emit('reconnect_room', { code: savedRoom, token: savedToken });
-    }
-  }, []);
+
 
   // ─── Lobby callbacks ────────────────────────────────────────────────────────
   const handleRoomCreated = useCallback((code: string, color: Color, _token: string, name: string) => {
@@ -291,6 +306,42 @@ const App: React.FC = () => {
     setDrawOffered(false);
     setWhiteTime(600);
     setBlackTime(600);
+    setIsDisconnected(false);
+    setReconnecting(false);
+  };
+
+  const handleSelfReconnect = () => {
+    const savedRoom  = localStorage.getItem('chess_room');
+    const savedToken = localStorage.getItem('chess_token');
+    if (!savedRoom || !savedToken) { handleNewGame(); return; }
+    setReconnecting(true);
+    const s = socketRef.current;
+
+    // One-time error handler: if room is gone, clear spinner and show message
+    const onReconnectFail = (data: { message: string }) => {
+      s.off('reconnected', onReconnectOk);
+      setReconnecting(false);
+      notify(`Could not rejoin: ${data.message}`, 4000);
+      // Clear stale session so the lobby doesn't show rejoin banner again
+      localStorage.removeItem('chess_room');
+      localStorage.removeItem('chess_token');
+      localStorage.removeItem('chess_color');
+      // Stay on the disconnect overlay — user can go back to lobby manually
+    };
+    const onReconnectOk = () => {
+      s.off('error_msg', onReconnectFail);
+      // onReconnected in the socket effect updates phase/state
+    };
+    s.once('error_msg',  onReconnectFail);
+    s.once('reconnected', onReconnectOk);
+
+    // Re-connect the socket if it dropped, then emit
+    if (!s.connected) s.connect();
+    const attempt = () => {
+      s.emit('reconnect_room', { code: savedRoom, token: savedToken });
+    };
+    if (s.connected) attempt();
+    else s.once('connect', attempt);
   };
 
   // ─── Captured pieces ────────────────────────────────────────────────────────
@@ -341,7 +392,34 @@ const App: React.FC = () => {
 
   return (
     <div className="game-layout">
-      {/* Notification toast */}
+      {/* Self-disconnect Reconnect Overlay */}
+      {isDisconnected && (
+        <div className="game-over-overlay" style={{ zIndex: 300 }}>
+          <div className="game-over-card">
+            <div className="go-icon">📡</div>
+            <h2 style={{ fontSize: '1.6rem' }}>Connection Lost</h2>
+            <p>You were disconnected from the game.</p>
+            <button
+              className="btn btn-primary"
+              onClick={handleSelfReconnect}
+              disabled={reconnecting}
+              style={{ minWidth: 180 }}
+            >
+              {reconnecting ? <><span className="spinner" /> Reconnecting…</> : '↩ Rejoin Game'}
+            </button>
+            <button className="btn" onClick={handleNewGame} style={{ marginTop: '-0.25rem' }}>
+              ← Back to Lobby
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Opponent disconnected banner */}
+      {!opponentConnected && !isDisconnected && (
+        <div className="draw-banner" style={{ borderColor: 'var(--red)', color: 'var(--red)' }}>
+          <span>⚠ Opponent disconnected — waiting for them to rejoin…</span>
+        </div>
+      )}
       {notification && <div className="toast">{notification}</div>}
 
       {/* Draw offer banner */}
